@@ -5,11 +5,12 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
-	"github.com/bmatsuo/go-jsontree"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
+
+	jsontree "github.com/bmatsuo/go-jsontree"
 )
 
 var ErrInvalidEventFormat = errors.New("Unable to parse event string. Invalid Format.")
@@ -20,6 +21,7 @@ type Event struct {
 	Branch     string // The branch the event took place on
 	Commit     string // The head commit hash attached to the event
 	Type       string // Can be either "pull_request" or "push"
+	Before     string // For Pushes, contains the SHA of the recent commit on Branch before the push.
 	Action     string // For Pull Requests, contains "assigned", "unassigned", "labeled", "unlabeled", "opened", "closed", "reopened", or "synchronize".
 	BaseOwner  string // For Pull Requests, contains the base owner
 	BaseRepo   string // For Pull Requests, contains the base repo
@@ -67,6 +69,9 @@ func NewEvent(e string) (*Event, error) {
 			return nil, ErrInvalidEventFormat
 		}
 	}
+	if event.Type == "push" && len(parts) == 6 {
+		event.Before = parts[5][8:]
+	}
 
 	return &event, nil
 }
@@ -83,6 +88,9 @@ func (e *Event) String() (output string) {
 		output += "bowner: " + e.BaseOwner + "\n"
 		output += "brepo:  " + e.BaseRepo + "\n"
 		output += "bbranch:" + e.BaseBranch + "\n"
+	}
+	if e.Type == "push" {
+		output += "before: " + e.Before + "\n"
 	}
 
 	return
@@ -219,6 +227,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		event.Before, err = request.Get("before").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	} else if eventType == "pull_request" {
 		event.Action, err = request.Get("action").String()
 		if err != nil {
