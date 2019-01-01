@@ -158,7 +158,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "400 Bad Request - Missing X-GitHub-Event Header", http.StatusBadRequest)
 		return
 	}
-	if eventType != "push" && eventType != "pull_request" {
+	if eventType != "push" && eventType != "pull_request" && eventType != "ping" {
 		http.Error(w, "400 Bad Request - Unknown Event Type "+eventType, http.StatusBadRequest)
 		return
 	}
@@ -273,6 +273,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		event.BaseBranch, err = request.Get("pull_request").Get("base").Get("ref").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if eventType == "ping" {
+		event.Type = eventType
+		event.Repo, err = request.Get("repository").Get("name").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.Owner, err = request.Get("repository").Get("owner").Get("login").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
